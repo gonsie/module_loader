@@ -19,7 +19,7 @@
 unsigned int module_index = 0;
 
 // EMPTY FUNCTIONS
-void blank_init(gate_state *s, tw_lp *lp) {
+void gate_init(gate_state *s, tw_lp *lp) {
     return;
 }
 
@@ -73,7 +73,7 @@ tw_lp * module_loader_mapping_to_local(tw_lpid lpid){
 }
 
 tw_lptype mylps[] = {
-    {(init_f) blank_init,
+    {(init_f) gate_init,
      (pre_run_f) NULL,
      (event_f) blank_event_handler,
      (revent_f) blank_event_handler_rc,
