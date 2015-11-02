@@ -124,19 +124,12 @@ int module_loader_main(int argc, char* argv[]){
     g_io_events_buffered_per_rank = 0;
     io_init_local(g_tw_nkp);
 
-    char dataname[100] = "/data.vbench";
+    char dataname[100];
     char *datapath = dirname(argv[0]);
-    strcat(datapath, dataname);
+    sprintf(dataname, "%s/data-%ld.vbench", datapath, g_tw_mynode);
 
-    //single processor, single file
-    // if (g_tw_synchronization_protocol == 1) {
-    //     //sequential
-    //     FILE *my_file = fopen(datapath, "r");
-    //     for (i = 0; i < TOTAL_GATE_COUNT; i++) {
-    //         fgets(global_input[i], LINE_LENGTH+2, my_file);
-    //     }
-    //     fclose(my_file);
-    // }
+    // ALWAYS USE MPI FILE I/O
+    // each rank reads its own file
 
     // //MPI_READ on rank 0, scatter around
     // // MAX_BLOCK_SIZE is the max size of the block of text for any single processor
