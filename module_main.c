@@ -14,6 +14,7 @@
 #include "routing.h"
 
 //#define VERIFY_READ 1
+#define LPS_PER_KP (18)
 
 unsigned int module_index = 0;
 
@@ -45,15 +46,30 @@ tw_peid module_loader_map(tw_lpid gid) {
 }
 
 void module_loader_mapping_setup(void){
+    int lpid, kpid;
+    int i;
+    tw_pe *pe = tw_pe_next(NULL);
+
+    int extra_lp_on_kp = g_tw_nlp - (g_tw_nkp * LPS_PER_KP);
+
+    for (lpid = 0, kpid = 0; kpid < g_tw_nkp; kpid++) {
+        tw_kp_onpe(kpid, pe);
+
+        int lps_on_kp = LPS_PER_KP;
+        if (kpid < extra_lp_on_kp) {
+            lps_on_kp++;
+        }
+
+        for (i = 0; i < lps_on_kp; i++, lpid++) {
+            tw_lp_onpe(lpid, pe, lpid);
+            tw_lp_onkp(g_tw_lp[lpid], g_tw_kp[kpid]);
+        }
+    }
     return;
 }
 
 tw_lp * module_loader_mapping_to_local(tw_lpid lpid){
-    return 0;
-}
-
-tw_peid module_loader_mapping_to_pe(tw_lpid gid){
-    return 0;
+    return g_tw_lp[lpid];
 }
 
 tw_lptype mylps[] = {
@@ -94,78 +110,78 @@ int module_loader_main(int argc, char* argv[]){
     g_tw_custom_initial_mapping = &module_loader_mapping_setup;
     g_tw_custom_lp_global_to_local_map = &module_loader_mapping_to_local;
 
-    //My kp count
-    g_tw_nkp = 64;
+    printf("Rank %ld loading Module %d\n", g_tw_mynode, module_index);
 
-    //My lp count
-    g_tw_nlp = LP_COUNT;
-    if (g_tw_mynode < EXTRA_LP_COUNT) {
-        g_tw_nlp++;
-    }
+    g_tw_nlp = routing_table[module_index+1] - routing_table[module_index];
+    g_tw_nkp = g_tw_nlp / LPS_PER_KP;
 
     tw_define_lps(g_tw_nlp, sizeof(message), 0);
-    for (i = 0; i < g_tw_nlp; i++) {
-        tw_lp_settype(i, &module_loader_lps[0]);
-    }
+
+    g_tw_lp_types = mylps;
+    g_io_lp_types = iolps;
+    tw_lp_setup_types();
+
+    g_io_events_buffered_per_rank = 0;
+    io_init_local(g_tw_nkp);
 
     char dataname[100] = "/data.vbench";
     char *datapath = dirname(argv[0]);
     strcat(datapath, dataname);
 
     //single processor, single file
-    if (g_tw_synchronization_protocol == 1) {
-        //sequential
-        FILE *my_file = fopen(datapath, "r");
-        for (i = 0; i < TOTAL_GATE_COUNT; i++) {
-            fgets(global_input[i], LINE_LENGTH+2, my_file);
-        }
-        fclose(my_file);
-    }
+    // if (g_tw_synchronization_protocol == 1) {
+    //     //sequential
+    //     FILE *my_file = fopen(datapath, "r");
+    //     for (i = 0; i < TOTAL_GATE_COUNT; i++) {
+    //         fgets(global_input[i], LINE_LENGTH+2, my_file);
+    //     }
+    //     fclose(my_file);
+    // }
 
-    //MPI_READ on rank 0, scatter around
-    // MAX_BLOCK_SIZE is the max size of the block of text for any single processor
-    // the text has been grouped into blocks for each processor
-    else {
-        // size of text block to be read
-        int MAX_BLOCK_SIZE = (LP_COUNT+1) * LINE_LENGTH;
-        char *block = (char *) malloc(MAX_BLOCK_SIZE);
+    // //MPI_READ on rank 0, scatter around
+    // // MAX_BLOCK_SIZE is the max size of the block of text for any single processor
+    // // the text has been grouped into blocks for each processor
+    // else {
+    //     // size of text block to be read
+    //     int MAX_BLOCK_SIZE = (LP_COUNT+1) * LINE_LENGTH;
+    //     char *block = (char *) malloc(MAX_BLOCK_SIZE);
 
-        // all reading happens from task 0
-        if (g_tw_mynode == 0) {
+    //     // all reading happens from task 0
+    //     if (g_tw_mynode == 0) {
 
-            FILE *f;
-            f = fopen(datapath, "r");
+    //         FILE *f;
+    //         f = fopen(datapath, "r");
 
-            // get max block size
-            for (i = 0; i < GLOBAL_NP_COUNT; i++) {
-                int BLOCK_SIZE = LP_COUNT * LINE_LENGTH;
-                if (i < EXTRA_LP_COUNT) {
-                    BLOCK_SIZE += LINE_LENGTH;
-                }
-                fread(block, BLOCK_SIZE, 1, f);
-                if (g_tw_mynode == i) {
-                    for (j = 0; j < g_tw_nlp; j++) {
-                        strncpy(global_input[j], block + (j * LINE_LENGTH), LINE_LENGTH);
-                    }
-                } else {
-                    MPI_Send(block, BLOCK_SIZE, MPI_CHAR, i, 0, MPI_COMM_WORLD);
-                }
+    //         // get max block size
+    //         for (i = 0; i < GLOBAL_NP_COUNT; i++) {
+    //             int BLOCK_SIZE = LP_COUNT * LINE_LENGTH;
+    //             if (i < EXTRA_LP_COUNT) {
+    //                 BLOCK_SIZE += LINE_LENGTH;
+    //             }
+    //             fread(block, BLOCK_SIZE, 1, f);
+    //             if (g_tw_mynode == i) {
+    //                 for (j = 0; j < g_tw_nlp; j++) {
+    //                     strncpy(global_input[j], block + (j * LINE_LENGTH), LINE_LENGTH);
+    //                 }
+    //             } else {
+    //                 MPI_Send(block, BLOCK_SIZE, MPI_CHAR, i, 0, MPI_COMM_WORLD);
+    //             }
 
-                printf("Reading lines for node %d\n", i);
-            }
+    //             printf("Reading lines for node %d\n", i);
+    //         }
 
-            fclose(f);
-            free(block);
-        } else {
-            int BLOCK_SIZE = g_tw_nlp * LINE_LENGTH;
-            MPI_Status req;
-            MPI_Recv(block, BLOCK_SIZE, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &req);
-            for (j = 0; j < g_tw_nlp; j++) {
-                strncpy(global_input[j], block + (j * LINE_LENGTH), LINE_LENGTH);
-            }
-            printf("Rank %d received its block\n", g_tw_mynode);
-        }
-    }
+    //         fclose(f);
+    //         free(block);
+    //     } else {
+    //         int BLOCK_SIZE = g_tw_nlp * LINE_LENGTH;
+    //         MPI_Status req;
+    //         MPI_Recv(block, BLOCK_SIZE, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &req);
+    //         for (j = 0; j < g_tw_nlp; j++) {
+    //             strncpy(global_input[j], block + (j * LINE_LENGTH), LINE_LENGTH);
+    //         }
+    //         printf("Rank %d received its block\n", g_tw_mynode);
+    //     }
+    // }
 
 #if VERIFY_READ
     if (g_tw_mynode == 0) {
@@ -178,7 +194,9 @@ int module_loader_main(int argc, char* argv[]){
     }
 #endif
 
-    //tw_run();
+    tw_run();
+
+    io_store_multiple_partitions("submodule_checkpoint");
 
     tw_end();
 
