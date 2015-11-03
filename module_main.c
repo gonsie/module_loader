@@ -13,13 +13,158 @@
 #include "library.h"
 #include "routing.h"
 
-//#define VERIFY_READ 1
+#define VERIFY_READ 1
 #define LPS_PER_KP (18)
 
 unsigned int module_index = 0;
 
+FILE * global_datafile_handle;
+long global_datafile_offset = 0;
+char global_datafile_buffer[513];
+
 // EMPTY FUNCTIONS
 void gate_init(gate_state *s, tw_lp *lp) {
+    int i;
+
+    // Load buffer starting at offset
+    global_datafile_buffer[512] = '\0';
+    fseek(global_datafile_handle, global_datafile_offset, SEEK_SET);
+
+    size_t amt_read;
+    int gid, type;
+    int offset;
+    char * line;
+
+    amt_read = fread(global_datafile_buffer, sizeof(char), 512, global_datafile_handle);
+    // TODO : EOF error handling?
+
+    line = global_datafile_buffer;
+    int count = sscanf(line, "%d %d %n", &gid, &type, &offset);
+#if VERIFY_READ
+    printf("Scan Found: GID %d TYPE %d ", gid, type);
+#endif
+    line += offset;
+    global_datafile_offset += offset;
+
+    assert(gid == lp->id && "ERROR: wrong lp id");
+
+    s->gate_type = type;
+
+    // IN OUT SIZE SPECIAL CASES
+    int in_size, out_size;
+    if (s->gate_type == fanout_TYPE) {
+        sscanf(line, "%d %n", &out_size, &offset);
+#if VERIFY_READ
+        printf("FAN_OUT_SIZE %d, ", out_size);
+#endif
+        line += offset;
+        global_datafile_offset += offset;
+        in_size = 1;
+    } else if (s->gate_type == mega_gate_TYPE) {
+        sscanf(line, "%d %d %n", &in_size, &out_size, &offset);
+#if VERIFY_READ
+        printf("MEGA_IN_SIZE %d, MEGA_OUT_SIZE %d, ", in_size, out_size);
+#endif
+        line += offset;
+        global_datafile_offset += offset;
+    } else {
+        in_size = gate_input_size[s->gate_type];
+        out_size = gate_output_size[s->gate_type];
+    }
+
+    // INIT input array
+    s->inputs = tw_calloc(TW_LOC, "gates_init_gate_input", in_size * sizeof(int), 1);
+    for (i = 0; i < in_size; i++) {
+        // Test for constants
+        if (strncmp(line, "#", 1) == 0) {
+            int constant;
+            sscanf(line, "#%d %n", &constant, &offset);
+#if VERIFY_READ
+            printf("CONST %d ", constant);
+#endif
+            line += offset;
+            global_datafile_offset += offset;
+            // TODO: some how mark this as not a GID
+            s->inputs[i] = constant;
+        } else {
+            int module, from_gid;
+            sscanf(line, "%d %n", &module, &offset);
+#if VERIFY_READ
+            printf("in %d, ", module);
+#endif
+           line += offset;
+            global_datafile_offset += offset;
+            if (strncmp(line, ".", 1) == 0) {
+                sscanf(line, "%d %n", &from_gid, &offset);
+                from_gid += routing_table[module];
+#if VERIFY_READ
+                printf("routing %d, ", from_gid);
+#endif
+                line += offset;
+                global_datafile_offset += offset;
+            } else {
+                from_gid = module;
+            }
+            if (from_gid >= 0) {
+                s->inputs[i] = routing_table[module_index] + from_gid;
+            }
+        }
+    }
+
+    // INIT internal array
+    s->internals = tw_calloc(TW_LOC, "gates_init_gate_internal", gate_internal_size[s->gate_type] * sizeof(int), 1);
+
+    // HACK!! Needed for fanout gate_func
+    if (s->gate_type == fanout_TYPE) {
+        s->internals[0] = out_size;
+    }
+
+    // INIT output array
+    s->output_size = out_size;
+
+    s->output_gid = tw_calloc(TW_LOC, "gates_init_gate_output", s->output_size * sizeof(int), 1);
+    s->output_pin = tw_calloc(TW_LOC, "gates_init_gate_output", s->output_size * sizeof(int), 1);
+    s->output_val = tw_calloc(TW_LOC, "gates_init_gate_output", s->output_size * sizeof(int), 1);
+    for (i = 0; i < s->output_size; i++) {
+        s->output_gid[i] = -1;
+        s->output_pin[i] = -1;
+        s->output_val[i] = -1;
+    }
+
+    for (i = 0; i < s->output_size; i++) {
+        int module, to_gid, to_pin;
+        sscanf(line, "%d%n", &module, &offset);
+#if VERIFY_READ
+        printf("out %d , ", module);
+#endif
+        line += offset;
+        global_datafile_offset += offset;
+        if (strncmp(line, ".", 1) == 0) {
+            sscanf(line, "%d %n", &to_gid, &offset);
+            to_gid += routing_table[module];
+#if VERIFY_READ
+            printf("TO ID %d , ", to_gid);
+#endif
+            line += offset;
+            global_datafile_offset += offset;
+        } else {
+            to_gid = module;
+        }
+
+        assert(1 == sscanf(line, "%d%n", &to_pin, &offset) && "ERROR: expected pindex");
+#if VERIFY_READ
+        printf("PIN %d, ", to_pin);
+#endif
+        line += offset;
+        global_datafile_offset += offset;
+        if (to_gid >= 0) {
+            s->output_gid[i] = to_gid;
+            s->output_pin[i] = to_pin;
+        }
+    }
+#if VERIFY_READ
+    printf("\n");
+#endif
     return;
 }
 
@@ -105,11 +250,11 @@ int module_loader_main(int argc, char* argv[]){
         return 1;
     }
 
-
     g_tw_mapping = CUSTOM;
     g_tw_custom_initial_mapping = &module_loader_mapping_setup;
     g_tw_custom_lp_global_to_local_map = &module_loader_mapping_to_local;
 
+    module_index += g_tw_mynode;
     printf("Rank %ld loading Module %d\n", g_tw_mynode, module_index);
 
     g_tw_nlp = routing_table[module_index+1] - routing_table[module_index];
@@ -126,68 +271,15 @@ int module_loader_main(int argc, char* argv[]){
 
     char dataname[100];
     char *datapath = dirname(argv[0]);
-    sprintf(dataname, "%s/data-%ld.vbench", datapath, g_tw_mynode);
+    int file_num = g_tw_mynode;
+    sprintf(dataname, "%s/data-%d.vbench", datapath, file_num);
 
-    // ALWAYS USE MPI FILE I/O
     // each rank reads its own file
-
-    // //MPI_READ on rank 0, scatter around
-    // // MAX_BLOCK_SIZE is the max size of the block of text for any single processor
-    // // the text has been grouped into blocks for each processor
-    // else {
-    //     // size of text block to be read
-    //     int MAX_BLOCK_SIZE = (LP_COUNT+1) * LINE_LENGTH;
-    //     char *block = (char *) malloc(MAX_BLOCK_SIZE);
-
-    //     // all reading happens from task 0
-    //     if (g_tw_mynode == 0) {
-
-    //         FILE *f;
-    //         f = fopen(datapath, "r");
-
-    //         // get max block size
-    //         for (i = 0; i < GLOBAL_NP_COUNT; i++) {
-    //             int BLOCK_SIZE = LP_COUNT * LINE_LENGTH;
-    //             if (i < EXTRA_LP_COUNT) {
-    //                 BLOCK_SIZE += LINE_LENGTH;
-    //             }
-    //             fread(block, BLOCK_SIZE, 1, f);
-    //             if (g_tw_mynode == i) {
-    //                 for (j = 0; j < g_tw_nlp; j++) {
-    //                     strncpy(global_input[j], block + (j * LINE_LENGTH), LINE_LENGTH);
-    //                 }
-    //             } else {
-    //                 MPI_Send(block, BLOCK_SIZE, MPI_CHAR, i, 0, MPI_COMM_WORLD);
-    //             }
-
-    //             printf("Reading lines for node %d\n", i);
-    //         }
-
-    //         fclose(f);
-    //         free(block);
-    //     } else {
-    //         int BLOCK_SIZE = g_tw_nlp * LINE_LENGTH;
-    //         MPI_Status req;
-    //         MPI_Recv(block, BLOCK_SIZE, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &req);
-    //         for (j = 0; j < g_tw_nlp; j++) {
-    //             strncpy(global_input[j], block + (j * LINE_LENGTH), LINE_LENGTH);
-    //         }
-    //         printf("Rank %d received its block\n", g_tw_mynode);
-    //     }
-    // }
-
-#if VERIFY_READ
-    if (g_tw_mynode == 0) {
-        printf("Line 0: %s\n", global_input[0]);
-        printf("Line 1: %s\n", global_input[1]);
-        printf("Line 2: %s\n", global_input[2]);
-        printf("Line 3: %s\n", global_input[3]);
-        printf("Line 100: %s\n", global_input[100]);
-        printf("Line Last: %s\n", global_input[LP_COUNT-1]);
-    }
-#endif
+    global_datafile_handle = fopen(dataname, "r");
 
     tw_run();
+
+    fclose(global_datafile_handle);
 
     io_store_multiple_partitions("submodule_checkpoint");
 
