@@ -3,7 +3,7 @@ INCLUDE_DIRECTORIES(${RIO_SOURCE_DIR} ${RIO_BINARY_DIR})
 
 # configure the run for the specified number of processors
 IF(NOT np)
-       SET(_np 1 CACHE INTERNAL "sequential" FORCE)
+       SET(_np 0 CACHE INTERNAL "sequential" FORCE)
 ELSE(NOT np)
 	SET(_np ${np} CACHE INTERNAL "parallel number of processors" FORCE)
 ENDIF(NOT np)
