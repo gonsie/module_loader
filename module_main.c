@@ -13,7 +13,7 @@
 #include "library.h"
 #include "routing.h"
 
-#define VERIFY_READ 1
+// #define VERIFY_READ 1
 #define LPS_PER_KP (18)
 
 unsigned int module_index = 0;
@@ -34,6 +34,7 @@ void gate_init(gate_state *s, tw_lp *lp) {
     int gid, type;
     int offset;
     char * line;
+    int total_offset = 0;
 
     amt_read = fread(global_datafile_buffer, sizeof(char), 512, global_datafile_handle);
     // TODO : EOF error handling?
@@ -41,10 +42,11 @@ void gate_init(gate_state *s, tw_lp *lp) {
     line = global_datafile_buffer;
     int count = sscanf(line, "%d %d %n", &gid, &type, &offset);
 #if VERIFY_READ
-    printf("Scan Found: GID %d TYPE %d ", gid, type);
+    printf("\nScan Found: GID %d TYPE %d ", gid, type);
 #endif
     line += offset;
     global_datafile_offset += offset;
+    total_offset += offset;
 
     assert(gid == lp->id && "ERROR: wrong lp id");
 
@@ -59,6 +61,7 @@ void gate_init(gate_state *s, tw_lp *lp) {
 #endif
         line += offset;
         global_datafile_offset += offset;
+        total_offset += offset;
         in_size = 1;
     } else if (s->gate_type == mega_gate_TYPE) {
         sscanf(line, "%d %d %n", &in_size, &out_size, &offset);
@@ -67,6 +70,7 @@ void gate_init(gate_state *s, tw_lp *lp) {
 #endif
         line += offset;
         global_datafile_offset += offset;
+        total_offset += offset;
     } else {
         in_size = gate_input_size[s->gate_type];
         out_size = gate_output_size[s->gate_type];
@@ -75,6 +79,15 @@ void gate_init(gate_state *s, tw_lp *lp) {
     // INIT input array
     s->inputs = tw_calloc(TW_LOC, "gates_init_gate_input", in_size * sizeof(int), 1);
     for (i = 0; i < in_size; i++) {
+
+        if (total_offset > 500) {
+            printf("RESTARTING BUFFER\n");
+            fseek(global_datafile_handle, global_datafile_offset, SEEK_SET);
+            fread(global_datafile_buffer, sizeof(char), 512, global_datafile_handle);
+            line = global_datafile_buffer;
+            total_offset = 0;
+        }
+
         // Test for constants
         if (strncmp(line, "#", 1) == 0) {
             int constant;
@@ -84,6 +97,7 @@ void gate_init(gate_state *s, tw_lp *lp) {
 #endif
             line += offset;
             global_datafile_offset += offset;
+            total_offset += offset;
             // TODO: some how mark this as not a GID
             s->inputs[i] = constant;
         } else {
@@ -92,16 +106,18 @@ void gate_init(gate_state *s, tw_lp *lp) {
 #if VERIFY_READ
             printf("in %d, ", module);
 #endif
-           line += offset;
+            line += offset;
             global_datafile_offset += offset;
+            total_offset += offset;
             if (strncmp(line, ".", 1) == 0) {
-                sscanf(line, "%d %n", &from_gid, &offset);
+                sscanf(line+1, "%d %n", &from_gid, &offset);
                 from_gid += routing_table[module];
 #if VERIFY_READ
                 printf("routing %d, ", from_gid);
 #endif
                 line += offset;
                 global_datafile_offset += offset;
+                total_offset += offset;
             } else {
                 from_gid = module;
             }
@@ -112,7 +128,11 @@ void gate_init(gate_state *s, tw_lp *lp) {
     }
 
     // INIT internal array
-    s->internals = tw_calloc(TW_LOC, "gates_init_gate_internal", gate_internal_size[s->gate_type] * sizeof(int), 1);
+    if (s->gate_type == fanout_TYPE) {
+        s->internals = tw_calloc(TW_LOC, "gates_init_gate_internal", 2 * sizeof(int), 1);
+    } else {
+        s->internals = tw_calloc(TW_LOC, "gates_init_gate_internal", gate_internal_size[s->gate_type] * sizeof(int), 1);
+    }
 
     // HACK!! Needed for fanout gate_func
     if (s->gate_type == fanout_TYPE) {
@@ -132,31 +152,43 @@ void gate_init(gate_state *s, tw_lp *lp) {
     }
 
     for (i = 0; i < s->output_size; i++) {
+
+        if (total_offset > 490) {
+            printf("RESTARTING BUFFER\n");
+            fseek(global_datafile_handle, global_datafile_offset, SEEK_SET);
+            fread(global_datafile_buffer, sizeof(char), 512, global_datafile_handle);
+            line = global_datafile_buffer;
+            total_offset = 0;
+        }
+
         int module, to_gid, to_pin;
         sscanf(line, "%d%n", &module, &offset);
 #if VERIFY_READ
-        printf("out %d , ", module);
+        printf("out %d ", module);
 #endif
         line += offset;
         global_datafile_offset += offset;
+        total_offset += offset;
         if (strncmp(line, ".", 1) == 0) {
-            sscanf(line, "%d %n", &to_gid, &offset);
-            to_gid += routing_table[module];
+            sscanf(line+1, "%d %n", &to_gid, &offset);
 #if VERIFY_READ
-            printf("TO ID %d , ", to_gid);
+            printf("ROUTE %d (%d)", to_gid, routing_table[module]);
 #endif
+            to_gid += routing_table[module];
             line += offset;
             global_datafile_offset += offset;
+            total_offset += offset;
         } else {
             to_gid = module;
         }
 
-        assert(1 == sscanf(line, "%d%n", &to_pin, &offset) && "ERROR: expected pindex");
+        assert(1 == sscanf(line, "%d %n", &to_pin, &offset) && "ERROR: expected pindex");
 #if VERIFY_READ
         printf("PIN %d, ", to_pin);
 #endif
         line += offset;
         global_datafile_offset += offset;
+        total_offset += offset;
         if (to_gid >= 0) {
             s->output_gid[i] = to_gid;
             s->output_pin[i] = to_pin;
