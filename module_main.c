@@ -271,7 +271,7 @@ int module_loader_main(int argc, char* argv[]){
 
     char dataname[100];
     char *datapath = dirname(argv[0]);
-    int file_num = g_tw_mynode;
+    int file_num = g_tw_mynode+module_index;
     sprintf(dataname, "%s/data-%d.vbench", datapath, file_num);
 
     // each rank reads its own file
@@ -281,7 +281,9 @@ int module_loader_main(int argc, char* argv[]){
 
     fclose(global_datafile_handle);
 
-    io_store_multiple_partitions("submodule_checkpoint");
+    char checkpointname[50];
+    sprintf(checkpointname, "module-%03d.checkpoint", file_num);
+    io_store_multiple_partitions(checkpointname);
 
     tw_end();
 
