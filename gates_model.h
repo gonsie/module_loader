@@ -66,6 +66,7 @@ typedef struct {
 
 // Command Line Options
 extern unsigned int module_index;
+extern unsigned int use_unique_name_flag;
 
 // Global vars accessed by main and driver
 extern tw_lptype gates_lps[];

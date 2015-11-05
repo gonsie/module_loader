@@ -17,6 +17,7 @@
 #define LPS_PER_KP (18)
 
 unsigned int module_index = 0;
+unsigned int use_unique_name_flag = 0;
 
 FILE * global_datafile_handle;
 long global_datafile_offset = 0;
@@ -215,6 +216,7 @@ void blank_finish(gate_state *s, tw_lp *lp){
 const tw_optdef module_loader_opts[] = {
     TWOPT_GROUP("Module Loader"),
     TWOPT_UINT("index", module_index,"index of submodule to be loaded"),
+    TWOPT_UINT("uname", use_unique_name_flag, "use a unique name for each module file"),
     TWOPT_END(),
 };
 
@@ -313,9 +315,13 @@ int module_loader_main(int argc, char* argv[]){
 
     fclose(global_datafile_handle);
 
-    char checkpointname[50];
-    sprintf(checkpointname, "module-%03d.checkpoint", file_num);
-    io_store_multiple_partitions(checkpointname);
+    if (use_unique_name_flag == 1) {
+        char checkpointname[50];
+        sprintf(checkpointname, "module-%03d.checkpoint", file_num);
+        io_store_multiple_partitions(checkpointname);
+    } else {
+        io_store_multiple_partitions("submodule-checkpoint");
+    }
 
     tw_end();
 
