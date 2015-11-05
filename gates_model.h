@@ -66,6 +66,11 @@ typedef struct {
 
 // Command Line Options
 extern unsigned int module_index;
+extern unsigned int lp_offset;
+extern unsigned int md_offset;
+extern unsigned int cp_file_num;
+extern unsigned int file_offset;
+extern unsigned int part_offset;
 extern unsigned int use_unique_name_flag;
 
 // Global vars accessed by main and driver
