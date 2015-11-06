@@ -13,7 +13,7 @@
 #include "library.h"
 #include "routing.h"
 
-// #define VERIFY_READ 1
+//#define VERIFY_READ 1
 #define LPS_PER_KP (18)
 #define PARTS_PER_FILE (6864)
 #define EXTRA_PARTS (2)
@@ -89,7 +89,6 @@ void gate_init(gate_state *s, tw_lp *lp) {
     for (i = 0; i < in_size; i++) {
 
         if (total_offset > 500) {
-            printf("RESTARTING BUFFER\n");
             fseek(global_datafile_handle, global_datafile_offset, SEEK_SET);
             fread(global_datafile_buffer, sizeof(char), 512, global_datafile_handle);
             line = global_datafile_buffer;
@@ -162,7 +161,6 @@ void gate_init(gate_state *s, tw_lp *lp) {
     for (i = 0; i < s->output_size; i++) {
 
         if (total_offset > 490) {
-            printf("RESTARTING BUFFER\n");
             fseek(global_datafile_handle, global_datafile_offset, SEEK_SET);
             fread(global_datafile_buffer, sizeof(char), 512, global_datafile_handle);
             line = global_datafile_buffer;
