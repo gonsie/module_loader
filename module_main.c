@@ -318,9 +318,9 @@ int module_loader_main(int argc, char* argv[]){
     if (use_unique_name_flag == 1) {
         char checkpointname[50];
         sprintf(checkpointname, "module-%03d.checkpoint", file_num);
-        io_store_multiple_partitions(checkpointname);
+        io_store_multiple_partitions(checkpointname, 0, 0);
     } else {
-        io_store_multiple_partitions("submodule-checkpoint");
+        io_store_multiple_partitions("submodule-checkpoint", 1, file_num);
     }
 
     tw_end();
