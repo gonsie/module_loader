@@ -15,8 +15,6 @@
 
 //#define VERIFY_READ 1
 #define LPS_PER_KP (18)
-#define PARTS_PER_FILE (6864)
-#define EXTRA_PARTS (2)
 
 unsigned int module_index = 0;
 unsigned int use_unique_name_flag = 0;
