@@ -117,9 +117,9 @@ void gate_init(gate_state *s, tw_lp *lp) {
 #if VERIFY_READ
                 printf("routing %d, ", from_gid);
 #endif
-                line += offset;
-                global_datafile_offset += offset;
-                total_offset += offset;
+                line += offset+1;
+                global_datafile_offset += offset+1;
+                total_offset += offset+1;
             } else {
                 from_gid = module;
             }
@@ -176,9 +176,9 @@ void gate_init(gate_state *s, tw_lp *lp) {
             printf("ROUTE %d (%d)", to_gid, routing_table[module]);
 #endif
             to_gid += routing_table[module];
-            line += offset;
-            global_datafile_offset += offset;
-            total_offset += offset;
+            line += offset+1;
+            global_datafile_offset += offset+1;
+            total_offset += offset+1;
         } else {
             to_gid = module;
         }
