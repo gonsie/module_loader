@@ -19,11 +19,6 @@
 #define EXTRA_PARTS (2)
 
 unsigned int module_index = 0;
-unsigned int lp_offset = 0;
-unsigned int md_offset = 0;
-unsigned int cp_file_num = 0;
-unsigned int file_offset = 0;
-unsigned int part_offset = 0;
 unsigned int use_unique_name_flag = 0;
 
 FILE * global_datafile_handle;
@@ -221,11 +216,6 @@ void blank_finish(gate_state *s, tw_lp *lp){
 const tw_optdef module_loader_opts[] = {
     TWOPT_GROUP("Module Loader"),
     TWOPT_UINT("index", module_index,"index of submodule to be loaded"),
-    TWOPT_UINT("lp-offset", lp_offset,"current offset into lp metadata file"),
-    TWOPT_UINT("md-offset", md_offset,"current offset into metadata file"),
-    TWOPT_UINT("file", cp_file_num,"current file for writing"),
-    TWOPT_UINT("file-offset", file_offset,"offset into current file"),
-    TWOPT_UINT("part", part_offset,"current partition being written in file"),
     TWOPT_UINT("uname", use_unique_name_flag, "use a unique name for each module file"),
     TWOPT_END(),
 };
@@ -334,10 +324,6 @@ int module_loader_main(int argc, char* argv[]){
     }
 
     tw_end();
-
-    printf("Checkpoint written. Start next run with:\n");
-    printf("--index=%d --lp-offset=%d --md-offset=%d --file=%d --file-offset=%d --part=%d\n",
-        module_index, lp_offset, md_offset, cp_file_num, file_offset, part_offset);
 
     return 0;
 }
