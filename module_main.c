@@ -134,6 +134,10 @@ void gate_init(gate_state *s, tw_lp *lp) {
     if (s->gate_type == fanout_TYPE) {
         s->internals[0] = out_size;
     }
+    // HACK!! Needed for mega_gate RIO sizing
+    if (s->gate_type == mega_gate_TYPE) {
+        s->internals[0] = in_size;
+    }
 
     // INIT output array
     s->output_size = out_size;
