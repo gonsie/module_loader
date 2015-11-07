@@ -128,11 +128,7 @@ void gate_init(gate_state *s, tw_lp *lp) {
     }
 
     // INIT internal array
-    if (s->gate_type == fanout_TYPE) {
-        s->internals = tw_calloc(TW_LOC, "gates_init_gate_internal", 2 * sizeof(int), 1);
-    } else {
-        s->internals = tw_calloc(TW_LOC, "gates_init_gate_internal", gate_internal_size[s->gate_type] * sizeof(int), 1);
-    }
+    s->internals = tw_calloc(TW_LOC, "gates_init_gate_internal", gate_internal_size[s->gate_type] * sizeof(int), 1);
 
     // HACK!! Needed for fanout gate_func
     if (s->gate_type == fanout_TYPE) {
